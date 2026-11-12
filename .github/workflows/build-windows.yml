@@ -1,0 +1,130 @@
+name: Build Windows installer
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-build-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  build:
+    name: Test and package Windows x64
+    runs-on: windows-2022
+    timeout-minutes: 30
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTHONUTF8: '1'
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+          architecture: x64
+          cache: pip
+          cache-dependency-path: |
+            requirements-build.lock
+            pyproject.toml
+
+      - name: Check release version
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          @'
+          import os
+          import tomllib
+          from pathlib import Path
+
+          version = tomllib.loads(Path('pyproject.toml').read_text(encoding='utf-8'))['project']['version']
+          if os.environ['RELEASE_TAG'] != f'v{version}':
+              raise SystemExit(f'Release tag must match the project version: v{version}')
+          '@ | python -
+
+      - name: Build app and installer, including tests
+        shell: cmd
+        run: |
+          python -m venv .venv
+          if errorlevel 1 exit /b 1
+          call build_windows.bat
+
+      - name: Check code quality
+        run: |
+          & .venv/Scripts/python.exe -m ruff check src tests tools
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & .venv/Scripts/python.exe -m ruff format --check src tests tools
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Verify packaged app and write checksums
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/verify_windows_build.ps1
+
+      - name: Upload Windows downloads
+        uses: actions/upload-artifact@v7
+        with:
+          name: PM7CloudPreviewFixer-Windows-x64
+          path: |
+            dist/PM7CloudPreviewFixer-Setup.exe
+            dist/PM7CloudPreviewFixer.exe
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+      - name: Upload build diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: Windows-build-diagnostics
+          path: |
+            build/PM7CloudPreviewFixer/warn-*.txt
+            build/packaged-smoke/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  release:
+    name: Publish tagged Windows release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download verified Windows build
+        uses: actions/download-artifact@v8
+        with:
+          name: PM7CloudPreviewFixer-Windows-x64
+          path: dist
+
+      - name: Publish release downloads
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" \
+              dist/PM7CloudPreviewFixer-Setup.exe \
+              dist/PM7CloudPreviewFixer.exe \
+              dist/SHA256SUMS.txt --clobber
+          else
+            gh release create "$RELEASE_TAG" --verify-tag \
+              --title "PM7 Cloud Preview Fixer $RELEASE_TAG" --generate-notes \
+              dist/PM7CloudPreviewFixer-Setup.exe \
+              dist/PM7CloudPreviewFixer.exe \
+              dist/SHA256SUMS.txt
+          fi

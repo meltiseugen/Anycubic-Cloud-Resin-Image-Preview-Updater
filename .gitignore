@@ -1,0 +1,16 @@
+.venv/
+.cache/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+.tools/
+*.pm7
+*.pwsz
+*.pm7m
+*.pm4u
+*.pp1
+*.pp1m
+*.log
