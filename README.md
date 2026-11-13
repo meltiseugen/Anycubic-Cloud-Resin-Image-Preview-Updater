@@ -197,8 +197,8 @@ as the **AnycubicFileUpdater-Windows-x64** artifact. Failed runs upload availabl
 To publish a release after committing and pushing the source/workflow:
 
 ```powershell
-git tag v1.1.0
-git push origin v1.1.0
+git tag v1.1.1
+git push origin v1.1.1
 ```
 
 The tag must match the version in `pyproject.toml`. For future releases, also update

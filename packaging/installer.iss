@@ -2,7 +2,7 @@
 [Setup]
 AppId={{F45EBFF8-579C-4851-817E-DDF63DF9EF8B}
 AppName=Anycubic File Updater
-AppVersion=1.1.0
+AppVersion=1.1.1
 AppPublisher=Anycubic File Updater
 ; The unchanged AppId and UsePreviousAppDir preserve existing install locations on upgrade.
 DefaultDirName={localappdata}\Programs\Anycubic File Updater

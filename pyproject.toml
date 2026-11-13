@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "anycubic-file-updater"
-version = "1.1.0"
+version = "1.1.1"
 description = "Offline Anycubic ZIP resin preview repair with print-data verification"
 requires-python = ">=3.12"
 dependencies = ["Pillow>=11,<14", "PySide6>=6.8,<7"]
