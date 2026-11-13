@@ -5,7 +5,7 @@ import zipfile
 import pytest
 from PIL import Image, ImageDraw
 
-from pm7fixer.core import PREVIEWS
+from anycubic_file_updater.core import PREVIEWS
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 

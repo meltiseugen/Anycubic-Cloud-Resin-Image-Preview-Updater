@@ -8,8 +8,8 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-from pm7fixer.core import PREVIEWS, Options, inspect_file, png_image, write_repaired
-from pm7fixer.formats import FORMATS
+from anycubic_file_updater.core import PREVIEWS, Options, inspect_file, png_image, write_repaired
+from anycubic_file_updater.formats import FORMATS
 
 
 def run_smoke():
@@ -31,21 +31,39 @@ def run_smoke():
                 archive.writestr(layer_name, layer)
                 archive.writestr("anycubic_photon_resins.pwsp", settings)
                 archive.writestr("print_info.json", '{"exposure": 2.5}')
-            inspection = inspect_file(source)
-            write_repaired(inspection, output, Options())
+            opaque_options = Options(transparent_preview2=False)
+            inspection = inspect_file(source, opaque_options)
+            write_repaired(inspection, output, opaque_options)
             with zipfile.ZipFile(output) as archive:
                 assert archive.testzip() is None
                 assert hashlib.sha256(archive.read(layer_name)).digest() == (
                     hashlib.sha256(layer).digest()
                 )
                 assert archive.read("anycubic_photon_resins.pwsp") == settings
+                assert archive.read(PREVIEWS[0]) == buffer.getvalue()
+                assert archive.read(PREVIEWS[1]) == buffer.getvalue()
                 assert png_image(archive.read(PREVIEWS[2])).size == (800, 600)
-            assert inspect_file(output).compatible
+            assert inspect_file(output, opaque_options).compatible
+            transparent_options = Options(transparent_preview2=True)
+            transparent_output = source.with_name(f"example_transparent{printer_format.extension}")
+            write_repaired(
+                inspect_file(source, transparent_options), transparent_output, transparent_options
+            )
+            with zipfile.ZipFile(transparent_output) as archive:
+                cloud = png_image(archive.read(PREVIEWS[2]))
+                assert cloud.size == (800, 600)
+                assert cloud.getpixel((0, 0))[3] == 0
+                assert archive.read(layer_name) == layer
+                assert archive.read("anycubic_photon_resins.pwsp") == settings
+                assert archive.read(PREVIEWS[0]) == buffer.getvalue()
+                assert archive.read(PREVIEWS[1]) == buffer.getvalue()
+            assert inspect_file(transparent_output, transparent_options).compatible
             formats[printer_format.extension] = "passed"
         return {
             "repair": "passed",
             "non_preview_sha256": "passed",
             "zip_integrity": "passed",
+            "transparent_preview2": "passed",
             "cloud_preview_size": [800, 600],
             "formats": formats,
         }

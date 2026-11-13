@@ -19,7 +19,7 @@ analysis = Analysis(
 pyz = PYZ(analysis.pure)
 exe = EXE(
     pyz, analysis.scripts, analysis.binaries, analysis.datas, [],
-    name="PM7CloudPreviewFixer",
+    name="AnycubicFileUpdater",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

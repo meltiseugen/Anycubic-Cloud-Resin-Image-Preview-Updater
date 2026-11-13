@@ -8,7 +8,7 @@ import pytest
 from conftest import artwork
 from PIL import Image
 
-from pm7fixer.core import (
+from anycubic_file_updater.core import (
     DEFAULT_COLORS,
     PREVIEWS,
     Options,
@@ -27,7 +27,7 @@ def hashes(path):
         return {
             name: hashlib.sha256(archive.read(name)).hexdigest()
             for name in archive.namelist()
-            if name not in PREVIEWS
+            if name != PREVIEWS[2]
         }
 
 
@@ -44,11 +44,12 @@ def test_repair_artwork_colors_dimensions_and_integrity(make_pm7):
     source = make_pm7(layers=2486)
     original_hashes = hashes(source)
     original_file_hash = hashlib.sha256(source.read_bytes()).digest()
-    inspection = inspect_file(source)
+    options = Options(transparent_preview2=False)
+    inspection = inspect_file(source, options)
     destination = default_output(source)
     progress = []
     result = write_repaired(
-        inspection, destination, progress=lambda value, message: progress.append(value)
+        inspection, destination, options, progress=lambda value, message: progress.append(value)
     )
     assert result.status == "Saved"
     assert destination.name == "original_with_preview.pm7"
@@ -67,13 +68,16 @@ def test_repair_artwork_colors_dimensions_and_integrity(make_pm7):
             assert old.comment == new.comment
             assert old.compress_type == new.compress_type
         for i, size in enumerate(((224, 168), (336, 252), (800, 600))):
+            if i != 2:
+                assert output.read(PREVIEWS[i]) == original.read(PREVIEWS[i])
+                continue
             image = png_image(output.read(PREVIEWS[i]))
             assert image.size == size
             assert image.mode == "RGBA"
             assert image.getextrema()[3] == (255, 255)
             assert image.getpixel((0, 0))[:3] == DEFAULT_COLORS[i]
             assert image.getpixel((size[0] // 2, size[1] // 2)) == (190, 80, 130, 255)
-    assert inspect_file(destination).compatible
+    assert inspect_file(destination, options).compatible
 
 
 def test_compatible_skip_and_idempotence(make_pm7):
@@ -95,14 +99,117 @@ def test_compatible_skip_and_idempotence(make_pm7):
         ]
 
 
-def test_generate_all_missing_previews_from_single_source(make_pm7):
+def test_generate_only_cloud_preview_from_single_source(make_pm7):
     source = make_pm7(previews={1: artwork((300, 100))})
     inspection = inspect_file(source)
-    assert all(png_image(p.repaired).getextrema()[3] == (255, 255) for p in inspection.previews)
     image = png_image(inspection.previews[2].repaired)
     assert image.size == (800, 600)
-    assert image.getpixel((400, 0))[:3] == DEFAULT_COLORS[2]
-    assert image.getpixel((400, 300))[:3] == (190, 80, 130)
+    assert image.getpixel((400, 0))[3] == 0
+    destination = default_output(source)
+    write_repaired(inspection, destination)
+    with zipfile.ZipFile(source) as original, zipfile.ZipFile(destination) as output:
+        assert PREVIEWS[0] not in output.namelist()
+        assert output.read(PREVIEWS[1]) == original.read(PREVIEWS[1])
+
+
+def test_transparent_cloud_preview_preserves_alpha_and_print_data(make_pm7):
+    source = make_pm7(previews={1: artwork((300, 100), color=(200, 80, 130, 128))})
+    original = source.read_bytes()
+    options = Options(transparent_preview2=True)
+    inspection = inspect_file(source, options)
+    assert inspection.previews[2].repaired_transparent
+    destination = default_output(source)
+    assert write_repaired(inspection, destination, options).status == "Saved"
+    assert source.read_bytes() == original
+    assert hashes(source) == hashes(destination)
+    with zipfile.ZipFile(destination) as archive:
+        cloud = png_image(archive.read(PREVIEWS[2]))
+        assert cloud.size == (800, 600)
+        assert cloud.getpixel((0, 0))[3] == 0
+        center = cloud.getpixel((400, 300))
+        assert center[3] == 128
+        # Resizing premultiplied alpha can round RGB channels by one level.
+        assert all(
+            abs(actual - expected) <= 1
+            for actual, expected in zip(center[:3], (200, 80, 130), strict=True)
+        )
+        assert PREVIEWS[0] not in archive.namelist()
+        with zipfile.ZipFile(source) as original_archive:
+            assert archive.read(PREVIEWS[1]) == original_archive.read(PREVIEWS[1])
+    checked = inspect_file(destination, options)
+    assert checked.compatible
+    assert checked.previews[2].original == checked.previews[2].repaired
+    assert write_repaired(checked, default_output(destination), options).status == "Skipped"
+    assert not inspect_file(destination, Options(transparent_preview2=False)).compatible
+
+
+@pytest.mark.parametrize("cloud_kind", ["opaque", "transparent", "empty"])
+def test_transparent_cloud_uses_available_artwork(make_pm7, cloud_kind):
+    cloud = (
+        artwork((400, 300), transparent=cloud_kind != "opaque", color=(0, 0, 255, 255))
+        if cloud_kind != "empty"
+        else encode_blank_cloud()
+    )
+    source = make_pm7(previews={0: artwork((600, 450), color=(255, 0, 0, 255)), 2: cloud})
+    inspection = inspect_file(source, Options(transparent_preview2=True))
+    rendered = png_image(inspection.previews[2].repaired)
+    assert rendered.getpixel((0, 0))[3] == 0
+    assert rendered.getpixel((400, 300)) == (
+        (0, 0, 255, 255) if cloud_kind == "transparent" else (255, 0, 0, 255)
+    )
+
+
+def encode_blank_cloud():
+    buffer = io.BytesIO()
+    Image.new("RGBA", (800, 600)).save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+def test_valid_transparent_cloud_is_kept_byte_for_byte(make_pm7):
+    cloud = artwork((800, 600))
+    source = make_pm7(
+        previews={0: artwork(transparent=False), 1: artwork(transparent=False), 2: cloud}
+    )
+    inspection = inspect_file(source, Options(transparent_preview2=True))
+    assert inspection.compatible
+    assert inspection.status == "Already compatible"
+    assert inspection.previews[2].repaired == cloud
+    assert inspection.previews[2].repaired_transparent
+
+
+def test_transparency_setting_keeps_baked_in_backgrounds(make_pm7):
+    source = make_pm7(compatible=True)
+    inspection = inspect_file(source, Options(transparent_preview2=True))
+    assert inspection.compatible
+    assert not inspection.previews[2].repaired_transparent
+    assert inspection.previews[2].original == inspection.previews[2].repaired
+
+
+@pytest.mark.parametrize("index", [0, 1])
+def test_writer_never_replaces_printer_previews(make_pm7, index):
+    source = make_pm7()
+    inspection = inspect_file(source)
+    inspection.previews[index].repaired = b"This proposal must never reach the output"
+    destination = default_output(source)
+    write_repaired(inspection, destination)
+    with zipfile.ZipFile(source) as original, zipfile.ZipFile(destination) as output:
+        assert output.read(PREVIEWS[index]) == original.read(PREVIEWS[index])
+    assert hashes(source) == hashes(destination)
+
+
+@pytest.mark.parametrize("transparent", [True, False])
+def test_cloud_compatibility_does_not_require_printer_previews(make_pm7, transparent):
+    cloud = artwork((800, 600), transparent=transparent)
+    source = make_pm7(previews={2: cloud})
+    options = Options(transparent_preview2=transparent)
+    inspection = inspect_file(source, options)
+    assert inspection.compatible
+    destination = default_output(source)
+    write_repaired(inspection, destination, options, force=True)
+    with zipfile.ZipFile(destination) as output:
+        assert PREVIEWS[0] not in output.namelist()
+        assert PREVIEWS[1] not in output.namelist()
+        assert output.read(PREVIEWS[2]) == cloud
 
 
 def test_cloud_source_prefers_highest_resolution_and_preserves_existing(make_pm7):
@@ -209,7 +316,7 @@ def test_write_failure_cleans_temp_and_preserves_destination(make_pm7, tmp_path,
     def fail(*args, **kwargs):
         raise OSError("simulated disk failure")
 
-    monkeypatch.setattr("pm7fixer.core.os.replace", fail)
+    monkeypatch.setattr("anycubic_file_updater.core.os.replace", fail)
     with pytest.raises(OSError, match="disk failure"):
         write_repaired(inspect_file(source), destination, overwrite=True)
     assert destination.read_bytes() == b"old file"
@@ -218,7 +325,7 @@ def test_write_failure_cleans_temp_and_preserves_destination(make_pm7, tmp_path,
 
 def test_integrity_failure_discards_temp(make_pm7, tmp_path, monkeypatch):
     source = make_pm7()
-    monkeypatch.setattr("pm7fixer.core._digest", lambda stream: "incorrect hash")
+    monkeypatch.setattr("anycubic_file_updater.core._digest", lambda stream: "incorrect hash")
     destination = default_output(source)
     with pytest.raises(RepairError, match="integrity verification"):
         write_repaired(inspect_file(source), destination)
@@ -284,7 +391,6 @@ def test_optional_real_references(tmp_path):
     assert not inspect_file(original).compatible
     assert inspect_file(workshop).compatible
     assert inspect_file(repaired).compatible
-    assert hashes(original) == hashes(repaired)
     generated = tmp_path / "rapunzel_with_preview.pm7"
     write_repaired(inspect_file(original), generated)
     assert inspect_file(generated).compatible
@@ -292,8 +398,6 @@ def test_optional_real_references(tmp_path):
     with zipfile.ZipFile(generated) as archive:
         layers = [name for name in archive.namelist() if name.endswith(".pw0Img")]
         assert len(layers) == 2486
-        for i, name in enumerate(PREVIEWS):
-            image = png_image(archive.read(name)).convert("RGBA")
-            assert image.getextrema()[3] == (255, 255)
-            assert image.getpixel((0, 0))[:3] == DEFAULT_COLORS[i]
+        image = png_image(archive.read(PREVIEWS[2]))
+        assert image.size == (800, 600)
         assert archive.testzip() is None

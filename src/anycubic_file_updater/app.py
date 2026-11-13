@@ -9,8 +9,8 @@ from pathlib import Path
 from PySide6.QtCore import QCoreApplication, QEvent, QSettings, QStandardPaths, QTimer
 from PySide6.QtWidgets import QApplication, QMessageBox
 
-from pm7fixer import __version__
-from pm7fixer.ui import start_window
+from anycubic_file_updater import APP_NAME, __version__
+from anycubic_file_updater.ui import start_window
 
 
 def dispose_widgets(app):
@@ -28,6 +28,8 @@ def main():
     QCoreApplication.setApplicationName("PM7 Cloud Preview Fixer")
     QCoreApplication.setApplicationVersion(__version__)
     app = QApplication(sys.argv[:1])
+    # Keep the existing settings/log storage identity when changing the visible name.
+    app.setApplicationDisplayName(APP_NAME)
     report_path = None
     if "--smoke-test" in sys.argv:
         if sys.platform == "win32":
@@ -52,12 +54,12 @@ def main():
 
     def handle_exception(exc_type, exc, traceback):
         logging.critical("Unhandled application error", exc_info=(exc_type, exc, traceback))
-        QMessageBox.critical(None, "PM7 Cloud Preview Fixer", str(exc))
+        QMessageBox.critical(None, APP_NAME, str(exc))
 
     sys.excepthook = handle_exception
     if report_path:
         # Explicit diagnostic mode; no printer, network, or user files involved.
-        from pm7fixer.smoke import run_smoke
+        from anycubic_file_updater.smoke import run_smoke
 
         try:
             report = run_smoke()

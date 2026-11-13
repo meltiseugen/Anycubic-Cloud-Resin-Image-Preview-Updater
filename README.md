@@ -1,8 +1,34 @@
-# PM7 Cloud Preview Fixer
+# Anycubic File Updater
 
 A Windows desktop app for repairing embedded PNG previews in ZIP-based Anycubic resin files.
 Everything runs offline. The original input file is always preserved. Only
-`preview_images/preview_0.png`, `preview_1.png`, and `preview_2.png` may change.
+`preview_images/preview_2.png` may change. Previews 0 and 1 are preserved byte-for-byte;
+missing printer previews are never created.
+
+## Screenshots
+
+The screenshots below show the current app using generated sample artwork.
+
+### Preview comparison
+
+Compare the embedded preview 2 with the proposed update before saving. Transparent areas
+are shown on a checkerboard.
+
+![Anycubic File Updater comparing a missing cloud preview with a generated transparent preview](docs/images/preview-comparison.png)
+
+### Saved outputs
+
+Process every file in the list and save updated copies beside their originals. Use
+**Open folder** beside an output path to find the saved file in Explorer.
+
+![Two updated files with Saved status, output paths, and Open folder buttons](docs/images/saved-outputs.png)
+
+### Settings
+
+Choose preview 2 transparency, PNG compression, inspection behavior, and integrity checks
+from the Settings gear.
+
+![Settings showing preview 2 transparency enabled and the available processing options](docs/images/settings.png)
 
 ## Printer and file-format support
 
@@ -29,7 +55,7 @@ Both `.pw0Img` and `.pwszImg` layers are retained without decoding, renaming or 
 
 The original extension is always retained: `model.pwsz` becomes `model_with_preview.pwsz`,
 and `model.pm7m` becomes `model_with_preview.pm7m`. Changing the extension to another printer's
-format is rejected. Import and folder discovery are case-insensitive.
+format is rejected. File import is case-insensitive.
 
 Older binary formats such as `.photon`, `.pwmb`, `.pm5s` and `.m5sp` are **not supported** by
 this ZIP/PNG repair. Renaming one of those files will not make it compatible. Actual slicer
@@ -38,56 +64,77 @@ format tests are not evidence of live printer or cloud compatibility.
 
 ## Install and use
 
-Download **[PM7CloudPreviewFixer-Setup.exe from the latest release](https://github.com/meltiseugen/Anycubic-Cloud-Resin-Image-Preview-Updater/releases/latest/download/PM7CloudPreviewFixer-Setup.exe)**,
+Download **[AnycubicFileUpdater-Setup.exe from the latest release](https://github.com/meltiseugen/Anycubic-Cloud-Resin-Image-Preview-Updater/releases/latest/download/AnycubicFileUpdater-Setup.exe)**,
 then run the downloaded file. The installer installs for your Windows user,
 adds Start menu and optional desktop shortcuts, and includes an uninstaller. No Python,
 administrator rights, cloud account, or internet connection is needed. The build targets
 Windows 10/11 x64 (Windows ARM64 requires x64 emulation). The executable is unsigned.
 
-Alternatively, download the **[portable EXE](https://github.com/meltiseugen/Anycubic-Cloud-Resin-Image-Preview-Updater/releases/latest/download/PM7CloudPreviewFixer.exe)**
+Alternatively, download the **[portable EXE](https://github.com/meltiseugen/Anycubic-Cloud-Resin-Image-Preview-Updater/releases/latest/download/AnycubicFileUpdater.exe)**
 and run it directly without installing. Release assets also include `SHA256SUMS.txt`.
 
 If no release has been published yet, or you want the latest development build:
 
 1. Open **[Actions → Build Windows installer](https://github.com/meltiseugen/Anycubic-Cloud-Resin-Image-Preview-Updater/actions/workflows/build-windows.yml)**.
-2. Select a successful run and download **PM7CloudPreviewFixer-Windows-x64** under **Artifacts**.
-3. Extract the downloaded ZIP and run `PM7CloudPreviewFixer-Setup.exe` (installer) or
-   `PM7CloudPreviewFixer.exe` (portable).
+2. Select a successful run and download **AnycubicFileUpdater-Windows-x64** under **Artifacts**.
+3. Extract the downloaded ZIP and run `AnycubicFileUpdater-Setup.exe` (installer) or
+   `AnycubicFileUpdater.exe` (portable).
 
 GitHub requires signing in to download Actions artifacts. Artifacts are retained for 30 days;
 published release downloads remain available. The repository contains source code; `dist/` is
 generated during builds and is intentionally excluded from Git. GitHub's **Code → Download ZIP**
 contains source, not the Windows executables.
 
-1. Drag a supported Anycubic print file onto the app, or click **Add Files**. **Add Folder** and
-   dropped folders recursively discover all six supported extensions. Select a row to see
-   before/after previews and the printer format.
-2. Choose Preview 0, 1, or 2 to inspect the proposed changes. Missing cloud artwork is generated
-   from an existing embedded preview. Transparency appears on a checkerboard in the Before panel.
-3. Click **Update Preview** and choose where to save. The suggested filename is
-   **`original_with_preview`** followed by the original extension. You can choose a different
-   output folder or filename while retaining that extension.
-4. Wait for **Saved** and the integrity verification message. Upload the output to Anycubic Cloud.
+1. Click **Add Files** and select individual Anycubic print files, or drag selected files onto
+   the app. Folder input is not supported. Select a row to see before/after previews and the
+   printer format.
+2. Inspect the before/after comparison for preview 2. Missing cloud artwork is generated
+   from existing embedded artwork. Transparent areas appear on a checkerboard.
+3. Click **Update Preview**. The updated copy is saved automatically beside its original as
+   **`original_with_preview`** followed by the original extension. No output-folder or save-file
+   selection is needed. Your original file is preserved.
+4. Wait for **Saved** and the integrity verification message. **Open folder** beside the output
+   path opens Explorer with that output file selected. Hover over a shortened path to see its full location.
+   Upload the output to Anycubic Cloud.
 
-For batches, select multiple rows and click **Update Preview**, or use **Fix All**. Choose a folder;
-each output gets the `_with_preview` suffix. Existing outputs require overwrite confirmation.
-Duplicate basenames in a batch are reported instead of overwriting one another. Invalid files
-fail independently; other jobs continue. **Cancel after current file** finishes the current file
-safely, then stops. Close the app after the worker finishes.
+The window uses borderless controls matching the dark interface. Drag the heading to move it,
+double-click it to maximize or restore, and drag any window edge or corner to resize.
+The Settings gear, minimize, maximize/restore and close controls sit beside the heading.
+**Update Preview** is aligned at the right below the comparison. A single progress bar shows
+the current file; there is no separate batch progress bar.
 
-Already compatible files are skipped by default, producing no output. Check **Process already
-compatible files** to save them anyway. Existing valid opaque previews are kept byte-for-byte.
-**Inspect Selected** supports manual inspection when automatic inspection is disabled.
+**Update Preview** processes every file in the list. There is no row selection or separate
+batch action. Clicking a row only changes the comparison being displayed.
+Each result is saved in its own source folder with the `_with_preview` suffix. Identical filenames
+in different folders produce separate outputs. Existing outputs require overwrite confirmation;
+imported input files cannot be overwritten. Invalid files fail independently; other jobs continue.
+Use the **×** at the end of a row to remove it, or **Clear List** above the table at the right to
+empty the list. Neither action deletes files from disk. **Cancel after current file** finishes
+the current file safely, then stops. Close the app after the worker finishes.
+
+Already compatible files are skipped by default, producing no output. To save them anyway,
+turn off **Skip files that are already compatible** in Settings. Existing previews that match
+the selected output settings are kept byte-for-byte.
+If **Inspect all files when added** is disabled, selecting a file inspects it on demand.
+
+Enable **Transparent background for preview 2** in Settings to preserve embedded transparency
+on its `800 × 600` canvas. An existing transparent preview 2 takes priority; otherwise the
+highest-resolution transparent embedded artwork is used. Previews 0 and 1 are only read as
+possible artwork sources and are never rewritten. The comparison shows only preview 2, with
+no selector. Transparency is on by default for new settings and Restore Defaults; an explicitly
+saved preference is retained. The preview 2 background-color picker is disabled when enabled.
+Solid backgrounds baked into every embedded preview are preserved; this setting does not
+remove them or reconstruct missing transparency.
 
 ## Repair and integrity
 
-- Preview 0: original dimensions; opaque background RGB `(2, 72, 100)`.
-- Preview 1: original dimensions; opaque background RGB `(20, 27, 41)`.
-- Preview 2: `800 × 600`; background RGB `(238, 240, 246)`. Existing artwork takes priority;
-  otherwise the largest embedded PNG supplies the artwork. LANCZOS scaling preserves aspect ratio,
-  with centered padding when needed. Valid opaque `800 × 600` preview 2 stays unchanged.
-- Missing previews 0/1 use the highest-resolution embedded artwork at its original dimensions.
-  Files without embedded PNG artwork, including entirely transparent sources, are unsupported.
+- Previews 0 and 1: existing PNG bytes and ZIP metadata are copied and SHA-256 verified.
+  Missing entries remain missing; compatibility depends only on preview 2.
+- Preview 2: `800 ? 600`, with transparency enabled by default. Existing transparent cloud
+  artwork takes priority; otherwise transparent embedded artwork is used when available.
+  With transparency disabled, the background is RGB `(238, 240, 246)` by default.
+  LANCZOS scaling preserves aspect ratio with centered padding.
+- Files without embedded PNG artwork, including entirely transparent sources, are unsupported.
   Duplicate ZIP entries, encrypted archives, invalid PNGs, non-ZIP files and unrecognized archive
   layouts are rejected.
 - Every other ZIP entry is streamed in 1 MiB chunks. SHA-256 checks verify every copied entry,
@@ -101,7 +148,7 @@ compatible files** to save them anyway. Existing valid opaque previews are kept 
   full ZIP CRC pass. Image limits are 48 MiB encoded and 32 million pixels per preview.
 
 Settings are stored locally using Windows QSettings (`HKCU\Software\PM7PreviewFixer`).
-Settings include default folder, skip compatible files, auto-inspection, PNG compression,
+Settings include preview 2 transparency, skip compatible files, auto-inspection, PNG compression,
 background colors, and extra ZIP checking. **Restore Defaults** resets all choices. Original-file
 preservation is always enabled. Logs rotate in the per-user AppLocalData directory (usually
 `%LOCALAPPDATA%\PM7PreviewFixer\PM7 Cloud Preview Fixer\app.log`).
@@ -113,7 +160,7 @@ Use Python 3.12+ on Windows:
 ```powershell
 py -3 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
-.\.venv\Scripts\python.exe -m pm7fixer.app
+.\.venv\Scripts\python.exe -m anycubic_file_updater.app
 .\.venv\Scripts\python.exe -m pytest -q
 .\.venv\Scripts\python.exe -m ruff check src tests tools
 ```
@@ -122,7 +169,7 @@ Tests build synthetic archives for all six formats, including a 2,486-layer PM7 
 extension preservation, printer-specific dialogs, both layer-entry extensions, opaque backgrounds,
 artwork colors, dimensions, highest-resolution source selection, idempotence, SHA-256 integrity,
 metadata preservation, corrupted layers, failed writes, cancellation, batch isolation, bounded
-preview caching, and actual Qt file import / save-dialog / drag-and-drop flows. A fresh-process
+preview caching, and actual Qt file import / automatic-output / drag-and-drop flows. A fresh-process
 smoke test also checks startup and clean shutdown. GUI tests use Qt's offscreen backend.
 
 No user reference PM7 files were supplied with the initial specification. To enable the optional
@@ -145,7 +192,7 @@ Each run installs the locked build dependencies, runs the tests, builds the stan
 installer, checks code quality, then runs the bundled EXE in an isolated working directory with
 Python removed from PATH. The smoke test checks repair, all six file formats, SHA-256 integrity,
 ZIP integrity, Qt startup and clean shutdown. Successful runs upload both EXEs and SHA-256 checksums
-as the **PM7CloudPreviewFixer-Windows-x64** artifact. Failed runs upload available build diagnostics.
+as the **AnycubicFileUpdater-Windows-x64** artifact. Failed runs upload available build diagnostics.
 
 To publish a release after committing and pushing the source/workflow:
 
@@ -155,7 +202,7 @@ git push origin v1.1.0
 ```
 
 The tag must match the version in `pyproject.toml`. For future releases, also update
-`src/pm7fixer/__init__.py`, `packaging/version.txt`, and `packaging/installer.iss` to the same version
+`src/anycubic_file_updater/__init__.py`, `packaging/version.txt`, and `packaging/installer.iss` to the same version
 before tagging. After a successful tagged build, a separate job creates a GitHub Release and
 attaches both EXEs and `SHA256SUMS.txt`. Re-running that tag's workflow replaces its release assets.
 Normal branch, pull-request and manual builds only upload Actions artifacts. No personal access
@@ -174,8 +221,8 @@ the standalone executable with PyInstaller, and compiles the installer. Set the 
 variable to the full `ISCC.exe` path if Inno Setup is not found automatically. Outputs:
 
 ```text
-dist/PM7CloudPreviewFixer.exe
-dist/PM7CloudPreviewFixer-Setup.exe
+dist/AnycubicFileUpdater.exe
+dist/AnycubicFileUpdater-Setup.exe
 ```
 
 These are local output paths, not files committed to the repository. To run the same packaged-app
@@ -193,11 +240,14 @@ To exercise bundled Pillow, ZIP repair, SHA-256 verification and Qt startup with
 
 ```powershell
 $env:QT_QPA_PLATFORM = 'offscreen'
-Start-Process -FilePath .\dist\PM7CloudPreviewFixer.exe -ArgumentList '--smoke-test', 'smoke.json' -Wait
+Start-Process -FilePath .\dist\AnycubicFileUpdater.exe -ArgumentList '--smoke-test', 'smoke.json' -Wait
 Get-Content smoke.json
 ```
 
 The repo separates the printer/extension registry (`formats.py`) and pure archive/image logic
 (`core.py`) from Qt workers/widgets (`ui.py`), local settings (`settings.py`), application startup
-(`app.py`) and packaging definitions (`packaging/`). App identity, installer location and settings
-keys are retained from version 1.0 so the 1.1 installer can upgrade an existing installation.
+(`app.py`) and packaging definitions (`packaging/`). The visible app and download names are now
+Anycubic File Updater. The installer AppId, existing installation directory, internal
+settings/log identity
+are retained so existing installations can upgrade without losing preferences. The installer
+replaces the old executable and shortcuts with the renamed ones.

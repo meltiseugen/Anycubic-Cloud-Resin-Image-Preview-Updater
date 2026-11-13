@@ -17,7 +17,7 @@ if errorlevel 1 goto :error
 if errorlevel 1 goto :error
 "%APP_PYTHON%" -m pytest -q
 if errorlevel 1 goto :error
-"%APP_PYTHON%" -m PyInstaller --clean --noconfirm PM7CloudPreviewFixer.spec
+"%APP_PYTHON%" -m PyInstaller --clean --noconfirm AnycubicFileUpdater.spec
 if errorlevel 1 goto :error
 set "APP_ISCC=%ISCC%"
 if not defined APP_ISCC if exist ".tools\InnoSetup\ISCC.exe" set "APP_ISCC=%CD%\.tools\InnoSetup\ISCC.exe"
@@ -25,13 +25,13 @@ if not defined APP_ISCC if exist "%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe" set
 if not defined APP_ISCC if exist "%ProgramFiles%\Inno Setup 7\ISCC.exe" set "APP_ISCC=%ProgramFiles%\Inno Setup 7\ISCC.exe"
 if not defined APP_ISCC for /f "delims=" %%I in ('where ISCC.exe 2^>nul') do set "APP_ISCC=%%I"
 if not defined APP_ISCC (
-    echo Standalone EXE built: dist\PM7CloudPreviewFixer.exe
+    echo Standalone EXE built: dist\AnycubicFileUpdater.exe
     echo Install Inno Setup or set ISCC to its ISCC.exe path, then run this script again.
     exit /b 2
 )
 "%APP_ISCC%" packaging\installer.iss
 if errorlevel 1 goto :error
-echo Built dist\PM7CloudPreviewFixer.exe and dist\PM7CloudPreviewFixer-Setup.exe
+echo Built dist\AnycubicFileUpdater.exe and dist\AnycubicFileUpdater-Setup.exe
 exit /b 0
 :error
 echo Build failed. See the error above.

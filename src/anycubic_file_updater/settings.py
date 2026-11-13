@@ -4,20 +4,26 @@ from dataclasses import dataclass, field
 
 from PySide6.QtCore import QSettings
 
-from pm7fixer.core import DEFAULT_COLORS, Options
+from anycubic_file_updater.core import DEFAULT_COLORS, Options
 
 
 @dataclass
 class Preferences:
-    output_folder: str = ""
     auto_inspect: bool = True
     skip_compatible: bool = True
     verify_zip: bool = True
     compression: int = 6
     colors: list[tuple[int, int, int]] = field(default_factory=lambda: list(DEFAULT_COLORS))
+    transparent_preview2: bool = True
 
     def options(self) -> Options:
-        return Options(tuple(self.colors), self.compression, self.verify_zip, self.skip_compatible)
+        return Options(
+            colors=tuple(self.colors),
+            compression=self.compression,
+            verify_zip=self.verify_zip,
+            skip_compatible=self.skip_compatible,
+            transparent_preview2=self.transparent_preview2,
+        )
 
     @classmethod
     def load(cls):
@@ -25,11 +31,11 @@ class Preferences:
         defaults = cls()
         try:
             return cls(
-                output_folder=store.value("output_folder", "", str),
                 auto_inspect=store.value("auto_inspect", True, bool),
                 skip_compatible=store.value("skip_compatible", True, bool),
                 verify_zip=store.value("verify_zip", True, bool),
                 compression=max(0, min(9, store.value("compression", 6, int))),
+                transparent_preview2=store.value("transparent_preview2", True, bool),
                 colors=[
                     tuple(
                         int(v)
@@ -49,11 +55,11 @@ class Preferences:
         self.validated()
         store = QSettings()
         for name in (
-            "output_folder",
             "auto_inspect",
             "skip_compatible",
             "verify_zip",
             "compression",
+            "transparent_preview2",
         ):
             store.setValue(name, getattr(self, name))
         for i, color in enumerate(self.colors):

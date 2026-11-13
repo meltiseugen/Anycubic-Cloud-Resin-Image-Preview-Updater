@@ -10,7 +10,7 @@ if (-not $DistDirectory) { $DistDirectory = Join-Path $PSScriptRoot '..\dist' }
 if (-not $ReportDirectory) { $ReportDirectory = Join-Path $PSScriptRoot '..\build\packaged-smoke' }
 $distPath = (Resolve-Path -LiteralPath $DistDirectory).Path
 $reportPath = [System.IO.Path]::GetFullPath($ReportDirectory)
-$artifacts = @('PM7CloudPreviewFixer.exe', 'PM7CloudPreviewFixer-Setup.exe')
+$artifacts = @('AnycubicFileUpdater.exe', 'AnycubicFileUpdater-Setup.exe')
 foreach ($artifact in $artifacts) {
     $artifactPath = Join-Path $distPath $artifact
     if (-not (Test-Path -LiteralPath $artifactPath -PathType Leaf)) {
@@ -46,7 +46,7 @@ try {
 }
 
 $report = Get-Content -LiteralPath $reportFile -Raw | ConvertFrom-Json
-foreach ($check in @('repair', 'non_preview_sha256', 'zip_integrity')) {
+foreach ($check in @('repair', 'non_preview_sha256', 'zip_integrity', 'transparent_preview2')) {
     if ($report.$check -ne 'passed') { throw "Packaged app check failed: $check" }
 }
 foreach ($extension in @('.pm7', '.pwsz', '.pm7m', '.pm4u', '.pp1', '.pp1m')) {
@@ -55,6 +55,7 @@ foreach ($extension in @('.pm7', '.pwsz', '.pm7m', '.pm4u', '.pp1', '.pp1m')) {
     }
 }
 if ($report.update_button -ne 'Update Preview') { throw 'Packaged UI check failed.' }
+if ($report.window_title -ne 'Anycubic File Updater') { throw 'Packaged app name check failed.' }
 
 $checksumLines = foreach ($artifact in $artifacts) {
     $hash = Get-FileHash -LiteralPath (Join-Path $distPath $artifact) -Algorithm SHA256
@@ -65,5 +66,5 @@ $checksumLines = foreach ($artifact in $artifacts) {
     [string[]]$checksumLines,
     [System.Text.UTF8Encoding]::new($false)
 )
-Write-Output 'Packaged repair, SHA-256 integrity, ZIP, six file formats, UI and clean exit passed.'
+Write-Output 'Packaged repair, transparent preview 2, SHA-256, ZIP, six formats, UI and clean exit passed.'
 Write-Output "Checksums: $(Join-Path $distPath 'SHA256SUMS.txt')"

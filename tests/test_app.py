@@ -13,7 +13,7 @@ def test_application_smoke_exits_cleanly(tmp_path):
     environment["QT_QPA_PLATFORM"] = "offscreen"
     environment["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
     process = subprocess.run(
-        [sys.executable, "-m", "pm7fixer.app", "--smoke-test", str(report)],
+        [sys.executable, "-m", "anycubic_file_updater.app", "--smoke-test", str(report)],
         env=environment,
         cwd=tmp_path,
         capture_output=True,
@@ -25,7 +25,9 @@ def test_application_smoke_exits_cleanly(tmp_path):
     result = json.loads(report.read_text(encoding="utf-8"))
     assert result["repair"] == "passed"
     assert result["non_preview_sha256"] == "passed"
+    assert result["transparent_preview2"] == "passed"
     assert result["update_button"] == "Update Preview"
+    assert result["window_title"] == "Anycubic File Updater"
     assert result["formats"] == {
         extension: "passed" for extension in (".pm7", ".pwsz", ".pm7m", ".pm4u", ".pp1", ".pp1m")
     }

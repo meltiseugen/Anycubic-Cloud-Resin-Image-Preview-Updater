@@ -15,7 +15,7 @@ from pathlib import Path
 
 from PIL import Image, ImageOps
 
-from pm7fixer.formats import EXTENSIONS_TEXT, file_format
+from anycubic_file_updater.formats import EXTENSIONS_TEXT, file_format
 
 PREVIEWS = tuple(f"preview_images/preview_{i}.png" for i in range(3))
 DEFAULT_COLORS = ((2, 72, 100), (20, 27, 41), (238, 240, 246))
@@ -35,6 +35,7 @@ class Options:
     compression: int = 6
     verify_zip: bool = True
     skip_compatible: bool = True
+    transparent_preview2: bool = True
 
     def __post_init__(self):
         if len(self.colors) != 3 or any(
@@ -52,11 +53,12 @@ DEFAULT_OPTIONS = Options()
 @dataclass
 class Preview:
     original: bytes | None
-    repaired: bytes
+    repaired: bytes | None
     dimensions: tuple[int, int] | None
     mode: str | None
     transparent: bool
     change: str
+    repaired_transparent: bool = False
 
 
 @dataclass
@@ -112,13 +114,13 @@ def encode(image: Image.Image, compression: int) -> bytes:
     return buffer.getvalue()
 
 
-def flatten(image: Image.Image, color: tuple[int, int, int], size=None) -> Image.Image:
+def flatten(image: Image.Image, color: tuple[int, int, int] | None, size=None) -> Image.Image:
     artwork = image.convert("RGBA")
     if size is None:
         size = artwork.size
     else:
         artwork = ImageOps.contain(artwork, size, Image.Resampling.LANCZOS)
-    canvas = Image.new("RGBA", size, (*color, 255))
+    canvas = Image.new("RGBA", size, (*color, 255) if color is not None else (0, 0, 0, 0))
     canvas.alpha_composite(
         artwork, ((size[0] - artwork.width) // 2, (size[1] - artwork.height) // 2)
     )
@@ -177,35 +179,52 @@ def inspect_file(path: str | Path, options: Options = DEFAULT_OPTIONS) -> Inspec
     if not artwork:
         raise RepairError("Unsupported file: no embedded PNG model artwork is available.")
     best = max(artwork, key=lambda i: artwork[i].width * artwork[i].height)
-    missing = len(images) < 3
-    transparent = any(has_alpha(img) for img in images.values())
+    missing = 2 not in images
+    transparent = 2 in images and has_alpha(images[2]) and not options.transparent_preview2
     wrong_size = 2 in images and images[2].size != (800, 600)
-    compatible = not (missing or transparent or wrong_size)
-    status = (
-        "Missing cloud preview"
-        if missing
-        else "Transparent previews detected"
-        if transparent
-        else "Preview dimensions incorrect"
-        if wrong_size
-        else "Already compatible"
-    )
     previews = []
     for i in range(3):
         original = images.get(i)
+        if i != 2:
+            previews.append(
+                Preview(
+                    originals.get(i),
+                    originals.get(i),
+                    original.size if original else None,
+                    original.mode if original else None,
+                    has_alpha(original) if original else False,
+                    "Keep unchanged",
+                    has_alpha(original) if original else False,
+                )
+            )
+            continue
         target = (800, 600) if i == 2 else None
         # Keep an existing cloud preview's artwork, even when another image is larger.
         source = original if original is not None else images[best]
         alpha = has_alpha(original) if original is not None else False
-        unchanged = original is not None and not alpha and (i != 2 or not wrong_size)
-        repaired = (
-            originals[i]
-            if unchanged
-            else encode(flatten(source, options.colors[i], target), options.compression)
+        transparent_cloud = i == 2 and options.transparent_preview2
+        if transparent_cloud and (not alpha or i not in artwork):
+            if i not in artwork:
+                source = images[best]
+            transparent_artwork = {j: img for j, img in artwork.items() if has_alpha(img)}
+            if transparent_artwork:
+                source = max(transparent_artwork.values(), key=lambda img: img.width * img.height)
+        unchanged = (
+            original is not None
+            and (i != 2 or not wrong_size)
+            and (source is original if transparent_cloud else not alpha)
         )
+        if unchanged:
+            repaired, repaired_alpha = originals[i], alpha
+        else:
+            rendered = flatten(source, None if transparent_cloud else options.colors[i], target)
+            repaired = encode(rendered, options.compression)
+            repaired_alpha = has_alpha(rendered)
         change = (
             "Keep unchanged"
             if unchanged
+            else "Fit embedded artwork onto transparent background"
+            if transparent_cloud
             else "Generate from embedded artwork"
             if original is None
             else "Composite onto opaque background" + ("; fit to 800 × 600" if i == 2 else "")
@@ -218,10 +237,23 @@ def inspect_file(path: str | Path, options: Options = DEFAULT_OPTIONS) -> Inspec
                 original.mode if original else None,
                 alpha,
                 change,
+                repaired_alpha,
             )
         )
     if signature(path) != before:
         raise RepairError("Input changed during inspection. Please import it again.")
+    compatible = previews[2].original == previews[2].repaired
+    status = (
+        "Missing cloud preview"
+        if missing
+        else "Transparent previews detected"
+        if transparent
+        else "Preview dimensions incorrect"
+        if wrong_size
+        else "Preview 2 transparency update"
+        if not compatible
+        else "Already compatible"
+    )
     return Inspection(path, before, status, compatible, previews)
 
 
@@ -269,9 +301,7 @@ def write_repaired(
         temporary = Path(name)
         os.close(handle)
         hashes = {}
-        replacements = {
-            name: p.repaired for name, p in zip(PREVIEWS, inspection.previews, strict=True)
-        }
+        replacements = {PREVIEWS[2]: inspection.previews[2].repaired}
         progress(0, "Copying archive and updating previews…")
         with zipfile.ZipFile(source) as original, zipfile.ZipFile(temporary, "w") as output:
             entries = _archive_entries(original)
@@ -301,7 +331,7 @@ def write_repaired(
                 output.writestr(name, data, compress_type=zipfile.ZIP_DEFLATED)
         progress(65, "Verifying unchanged print data (SHA-256)…")
         with zipfile.ZipFile(temporary) as completed:
-            expected = {entry.filename for entry in entries} | set(PREVIEWS)
+            expected = {entry.filename for entry in entries} | {PREVIEWS[2]}
             if set(completed.namelist()) != expected:
                 raise RepairError("Output archive entries failed validation.")
             for index, (name, expected_hash) in enumerate(hashes.items()):
@@ -312,9 +342,10 @@ def write_repaired(
                     65 + int(30 * (index + 1) / max(1, len(hashes))),
                     "Verifying unchanged print data (SHA-256)…",
                 )
-            for i, name in enumerate(PREVIEWS):
+            for i, name in ((2, PREVIEWS[2]),):
                 image = png_image(completed.read(name))
-                if has_alpha(image) or (i == 2 and image.size != (800, 600)):
+                unwanted_alpha = has_alpha(image) and not (i == 2 and options.transparent_preview2)
+                if unwanted_alpha or (i == 2 and image.size != (800, 600)):
                     raise RepairError(f"Repaired preview failed validation: {name}")
             if options.verify_zip:
                 progress(96, "Checking complete ZIP integrity…")

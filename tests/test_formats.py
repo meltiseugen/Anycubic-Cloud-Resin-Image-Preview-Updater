@@ -6,8 +6,14 @@ import pytest
 from PIL import Image
 from test_core import hashes
 
-from pm7fixer.core import PREVIEWS, RepairError, default_output, inspect_file, write_repaired
-from pm7fixer.formats import FORMATS, OPEN_FILE_FILTER, file_format, is_supported_file
+from anycubic_file_updater.core import (
+    PREVIEWS,
+    RepairError,
+    default_output,
+    inspect_file,
+    write_repaired,
+)
+from anycubic_file_updater.formats import FORMATS, OPEN_FILE_FILTER, file_format, is_supported_file
 
 
 @pytest.mark.parametrize("printer_format", FORMATS, ids=lambda value: value.extension)
